@@ -1,0 +1,118 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+
+  /* One strong accent: signal orange. BEST tier + app identity. */
+  --color-accent: #ff5a2b;
+  --color-accent-soft: #ff8a5c;
+  --color-accent-dim: #4a1d10;
+
+  /* MUST tier: this is enough. */
+  --color-must: #8ce04a;
+  --color-must-ink: #0b0c0e;
+  --color-must-dim: #23320f;
+
+  /* Neutral, non-punitive colours for the other tiers. */
+  --color-missed: #7b8794;
+  --color-skipped: #4a5057;
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #ececea;
+  --line: #dcdcd7;
+  --ink: #121316;
+  --ink-2: #55585f;
+  --ink-3: #85898f;
+  --must: #4e9c16;
+  --must-ink: #ffffff;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #0b0c0e;
+  --surface: #141619;
+  --surface-2: #1c1f24;
+  --line: #26292f;
+  --ink: #f2f3f5;
+  --ink-2: #a3a8b0;
+  --ink-3: #6d737c;
+  --must: #8ce04a;
+  --must-ink: #0b0c0e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Big, thumb-friendly number fields with no spinner clutter. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 30px;
+  width: 30px;
+  margin-top: -12px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.4);
+}
+
+/* The plan filter row scrolls sideways on purpose; the bar is just noise. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pop { animation: pop 160ms ease-out; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
