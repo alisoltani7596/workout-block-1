@@ -29,11 +29,10 @@ host. Relative base, so a subpath works.
 npm run deploy
 ```
 
-Builds and publishes `dist/` to the `gh-pages` branch, which GitHub Pages serves. Run it after
-any change you want on the phone. There is deliberately no Actions workflow: the `gh` token on
-this machine has `repo` scope but not `workflow`, and GitHub refuses a `.github/workflows/`
-file without it. If you want deploy-on-push later, `gh auth refresh -s workflow` grants the
-scope and a standard Pages workflow can be added.
+Every push to `main` deploys automatically via `.github/workflows/pages.yml` — build, then
+publish `dist/` through GitHub's Pages deployment action. `npm run deploy` still works as a
+manual fallback: it builds locally and force-pushes `dist/` to the `gh-pages` branch, though
+with the workflow in charge Pages no longer serves that branch.
 
 ```bash
 npm run build:file
