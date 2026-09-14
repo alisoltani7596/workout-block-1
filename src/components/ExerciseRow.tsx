@@ -1,8 +1,22 @@
 import { useState } from 'react'
-import { exercise, restSeconds, type PlanItem } from '../lib/program'
-import { lastPerformance, type DayLog, type SetLog } from '../lib/store'
+import {
+  METRIC,
+  exercise,
+  metricsFor,
+  restSeconds,
+  type MetricKey,
+  type PlanItem,
+} from '../lib/program'
+import {
+  lastPerformance,
+  type DayLog,
+  type ExerciseFeedback,
+  type Feel,
+  type SetLog,
+} from '../lib/store'
 import { ExerciseImage } from './ExerciseImage'
 import { useRestTimer } from './RestTimer'
+import { FeelPicker } from './FeelPicker'
 import { dayMonth } from '../lib/dates'
 
 const DEFAULT_REST = 60
@@ -13,13 +27,15 @@ type Props = {
   log: DayLog
   logs: Record<string, DayLog>
   onSets: (exKey: string, sets: SetLog[]) => void
+  onFeedback: (exKey: string, patch: Partial<ExerciseFeedback>) => void
 }
 
-export function ExerciseRow({ item, date, log, logs, onSets }: Props) {
+export function ExerciseRow({ item, date, log, logs, onSets, onFeedback }: Props) {
   const entry = exercise(item.ex)
   const [open, setOpen] = useState(false)
   const rest = useRestTimer()
 
+  const metrics = metricsFor(item.ex)
   const stored = log.exercises[item.ex] ?? []
   const sets: SetLog[] = Array.from({ length: item.sets }, (_, i) => {
     const s = stored.find((x) => x.setIndex === i)
@@ -29,6 +45,7 @@ export function ExerciseRow({ item, date, log, logs, onSets }: Props) {
 
   const restSec = restSeconds(item.rest) ?? DEFAULT_REST
   const last = lastPerformance(logs, item.ex, date)
+  const feedback = log.feedback?.[item.ex]
 
   const patch = (i: number, next: Partial<SetLog>) => {
     onSets(
@@ -44,10 +61,7 @@ export function ExerciseRow({ item, date, log, logs, onSets }: Props) {
   }
 
   return (
-    <li
-      className="border-b last:border-b-0"
-      style={{ borderColor: 'var(--line)' }}
-    >
+    <li className="border-b last:border-b-0" style={{ borderColor: 'var(--line)' }}>
       <div className="flex items-center gap-3 px-3 py-3">
         <button
           onClick={() => setOpen((o) => !o)}
@@ -67,6 +81,7 @@ export function ExerciseRow({ item, date, log, logs, onSets }: Props) {
                   ✓
                 </span>
               )}
+              {feedback?.feel != null && <FeelDot feel={feedback.feel} />}
             </span>
             <span className="num mt-0.5 block text-[13px]" style={{ color: 'var(--ink-2)' }}>
               {item.sets > 1 ? `${item.sets} × ${item.reps}` : item.reps}
@@ -103,9 +118,11 @@ export function ExerciseRow({ item, date, log, logs, onSets }: Props) {
       <div className="px-3 pb-3">
         {last && (
           <p className="num mb-2 text-[11px]" style={{ color: 'var(--ink-3)' }}>
-            last: {formatLast(last)} <span className="opacity-70">({dayMonth(last.date)})</span>
+            last: {formatSet(last.set, metrics)}{' '}
+            <span className="opacity-70">({dayMonth(last.date)})</span>
           </p>
         )}
+
         <div className="flex flex-col gap-2">
           {sets.map((s) => (
             <div key={s.setIndex} className="flex items-center gap-2">
@@ -134,46 +151,75 @@ export function ExerciseRow({ item, date, log, logs, onSets }: Props) {
                 </button>
               )}
 
-              <MiniInput
-                aria-label={`Set ${s.setIndex + 1} weight in kilograms`}
-                suffix="kg"
-                value={s.weightKg}
-                onChange={(v) => patch(s.setIndex, { weightKg: v })}
-                step={0.5}
-              />
-              <MiniInput
-                aria-label={`Set ${s.setIndex + 1} reps`}
-                suffix="reps"
-                value={s.reps}
-                onChange={(v) => patch(s.setIndex, { reps: v })}
-                step={1}
-              />
+              {metrics.map((m) => (
+                <MiniInput
+                  key={m}
+                  metric={m}
+                  aria-label={`Set ${s.setIndex + 1} ${METRIC[m].label}`}
+                  value={s[m]}
+                  onChange={(v) => patch(s.setIndex, { [m]: v })}
+                />
+              ))}
+
+              {metrics.length === 0 && (
+                <span className="flex-1 text-[12px]" style={{ color: 'var(--ink-3)' }}>
+                  nothing to measure — just tick it
+                </span>
+              )}
             </div>
           ))}
         </div>
+
+        <FeelPicker
+          feedback={feedback}
+          onChange={(p) => onFeedback(item.ex, p)}
+          placeholder={`How did ${entry.name.toLowerCase()} feel? Anything worth changing next month.`}
+        />
       </div>
     </li>
   )
 }
 
-function formatLast(last: { weightKg?: number; reps?: number }) {
-  const w = last.weightKg != null ? `${last.weightKg} kg` : null
-  const r = last.reps != null ? `${last.reps}` : null
-  if (w && r) return `${w} × ${r}`
-  return w ?? (r ? `${r} reps` : '—')
+/** "20 kg × 10", "45 s", "30 min · 8.2 km" */
+export function formatSet(set: SetLog, metrics: MetricKey[]): string {
+  const parts = metrics
+    .filter((m) => set[m] != null)
+    .map((m) => `${set[m]} ${METRIC[m].suffix}`)
+  if (!parts.length) return 'done'
+  // Weight against reps reads better as a product than a list.
+  if (metrics[0] === 'weightKg' && metrics[1] === 'reps' && parts.length === 2) {
+    return `${set.weightKg} kg × ${set.reps}`
+  }
+  return parts.join(' · ')
+}
+
+export const FEEL_COLOR: Record<Feel, string> = {
+  1: 'var(--color-missed)',
+  2: 'var(--must)',
+  3: 'var(--must)',
+  4: 'var(--color-accent)',
+  5: 'var(--color-accent)',
+}
+
+function FeelDot({ feel }: { feel: Feel }) {
+  return (
+    <span
+      className="h-1.5 w-1.5 shrink-0 rounded-full"
+      style={{ background: FEEL_COLOR[feel] }}
+      aria-hidden
+    />
+  )
 }
 
 function MiniInput({
   value,
   onChange,
-  suffix,
-  step,
+  metric,
   'aria-label': ariaLabel,
 }: {
   value?: number
   onChange: (v: number | undefined) => void
-  suffix: string
-  step: number
+  metric: MetricKey
   'aria-label': string
 }) {
   return (
@@ -190,7 +236,7 @@ function MiniInput({
       <input
         type="number"
         inputMode="decimal"
-        step={step}
+        step={METRIC[metric].step}
         min={0}
         aria-label={ariaLabel}
         value={value ?? ''}
@@ -200,7 +246,7 @@ function MiniInput({
         style={{ color: 'var(--ink)' }}
       />
       <span className="pr-2 text-[10px]" style={{ color: 'var(--ink-3)' }}>
-        {suffix}
+        {METRIC[metric].suffix}
       </span>
     </div>
   )

@@ -12,11 +12,13 @@ import {
   YAxis,
   type TooltipContentProps,
 } from 'recharts'
-import { days, meta, weeks } from '../lib/program'
+import { days, exercise, meta, metricsFor, weeks } from '../lib/program'
 import { addDays, dayMonth, daysBetween, todayISO } from '../lib/dates'
 import { useStore, type DayLog } from '../lib/store'
 import { currentStreak, isDone, targetWeightOn, weightSummary, weightTrend } from '../lib/trend'
 import { Card, Empty, SectionTitle, Stat, TIER_COLOR } from '../components/ui'
+import { FEEL_SCALE } from '../components/FeelPicker'
+import { formatSet } from '../components/ExerciseRow'
 
 const BAND = 0.35 // kg of slack either side of the planned line
 
@@ -97,6 +99,8 @@ export function Progress() {
     [logs],
   )
   const sleepPairs = sleepData.filter((d) => d.sleepScore != null && d.nextRpe != null).length
+
+  const feedbackRows = useMemo(() => collectFeedback(logs), [logs])
 
   return (
     <div className="flex flex-col gap-7">
@@ -352,7 +356,60 @@ export function Progress() {
         </Card>
       </section>
 
-      {/* 6. Weekly summary */}
+      {/* 6. How each exercise felt */}
+      <section>
+        <SectionTitle hint="what month 2 gets built on">Exercise feedback</SectionTitle>
+        <Card>
+          {feedbackRows.length === 0 ? (
+            <div className="p-3">
+              <Empty>
+                Rate an exercise on the Today tab — "too easy" through "too hard" — and it lands
+                here, hardest first.
+              </Empty>
+            </div>
+          ) : (
+            <ul>
+              {feedbackRows.map((row) => (
+                <li
+                  key={row.key}
+                  className="border-b px-3.5 py-3 last:border-b-0"
+                  style={{ borderColor: 'var(--line)' }}
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">
+                      {row.name}
+                    </span>
+                    <span
+                      className="num shrink-0 text-[11px] font-bold"
+                      style={{ color: row.color }}
+                    >
+                      {row.label}
+                    </span>
+                  </div>
+                  <div className="num mt-0.5 text-[11px]" style={{ color: 'var(--ink-3)' }}>
+                    {row.rated} rating{row.rated === 1 ? '' : 's'}
+                    {row.best ? ` · best set ${row.best}` : ''}
+                  </div>
+                  {row.notes.map((n) => (
+                    <p
+                      key={n.date}
+                      className="mt-1.5 text-[13px] leading-snug"
+                      style={{ color: 'var(--ink-2)' }}
+                    >
+                      <span className="num" style={{ color: 'var(--ink-3)' }}>
+                        {dayMonth(n.date)}:{' '}
+                      </span>
+                      {n.note}
+                    </p>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </section>
+
+      {/* 7. Weekly summary */}
       <section>
         <SectionTitle>By week</SectionTitle>
         <Card className="overflow-x-auto">
@@ -553,6 +610,66 @@ function SessionTip({ active, payload }: TipProps) {
       </div>
     </div>
   )
+}
+
+type FeedbackRow = {
+  key: string
+  name: string
+  rated: number
+  label: string
+  color: string
+  best: string | null
+  notes: { date: string; note: string }[]
+}
+
+/**
+ * Averages each exercise's feel across the block and keeps every note, so the
+ * hardest movements sort to the top when it is time to write the next block.
+ */
+function collectFeedback(logs: Record<string, DayLog>): FeedbackRow[] {
+  const acc = new Map<string, { feels: number[]; notes: { date: string; note: string }[] }>()
+  for (const date of Object.keys(logs).sort()) {
+    for (const [key, fb] of Object.entries(logs[date].feedback ?? {})) {
+      const row = acc.get(key) ?? { feels: [], notes: [] }
+      if (fb.feel != null) row.feels.push(fb.feel)
+      if (fb.note) row.notes.push({ date, note: fb.note })
+      acc.set(key, row)
+    }
+  }
+
+  return [...acc.entries()]
+    .map(([key, row]) => {
+      const avg = row.feels.length
+        ? row.feels.reduce((a, b) => a + b, 0) / row.feels.length
+        : null
+      const scale = avg != null ? FEEL_SCALE[Math.round(avg) - 1] : undefined
+      return {
+        key,
+        name: exercise(key).name,
+        rated: row.feels.length,
+        label: scale?.short ?? 'note only',
+        color: scale?.color ?? 'var(--ink-3)',
+        best: bestSetFor(logs, key),
+        notes: row.notes.slice(-3).reverse(),
+        avg: avg ?? 0,
+      }
+    })
+    .sort((a, b) => b.avg - a.avg)
+}
+
+function bestSetFor(logs: Record<string, DayLog>, key: string): string | null {
+  const metrics = metricsFor(key)
+  if (!metrics.length) return null
+  let best: { text: string; score: number } | null = null
+  for (const log of Object.values(logs)) {
+    for (const set of log.exercises[key] ?? []) {
+      const score = metrics.reduce((a, m) => a + (set[m] ?? 0), 0)
+      if (score > 0 && (!best || score > best.score)) {
+        best = { text: formatSet(set, metrics), score }
+      }
+    }
+  }
+  return best?.text ?? null
 }
 
 function weekSummary(logs: Record<string, DayLog>, week: number) {

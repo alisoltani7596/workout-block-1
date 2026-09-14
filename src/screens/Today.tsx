@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { dayFor, days, firstDate, habits, lastDate, type TierName } from '../lib/program'
-import { addDays, positionInBlock, shortDate } from '../lib/dates'
+import { addDays, positionInBlock, shortDate, todayISO } from '../lib/dates'
 import { useStore } from '../lib/store'
 import { ExerciseRow } from '../components/ExerciseRow'
+import { MorningStretch } from '../components/MorningStretch'
 import { TargetBar } from '../components/TargetBar'
 import { Card, SectionTitle, TypeTag } from '../components/ui'
 
@@ -17,11 +18,11 @@ export function Today({
   tier: TierName
   setTier: (t: TierName) => void
 }) {
-  const { logs, logFor, setSets, updateLog } = useStore()
+  const { logs, logFor, setSets, setFeedback, updateLog } = useStore()
   const day = dayFor(date)
   const log = logFor(date)
   const [showMissed, setShowMissed] = useState(false)
-  const position = positionInBlock(new Date().toISOString().slice(0, 10))
+  const position = positionInBlock(todayISO())
 
   if (!day) return null
   const block = day[tier]
@@ -81,6 +82,11 @@ export function Today({
         </p>
       </header>
 
+      <MorningStretch
+        value={log.morningStretch}
+        onChange={(next) => updateLog(date, { morningStretch: next })}
+      />
+
       <TierToggle day={{ must: day.must.durationMin, best: day.best.durationMin }} tier={tier} setTier={setTier} />
 
       <Card>
@@ -93,6 +99,7 @@ export function Today({
               log={log}
               logs={logs}
               onSets={(exKey, sets) => setSets(date, exKey, sets)}
+              onFeedback={(exKey, p) => setFeedback(date, exKey, p)}
             />
           ))}
         </ul>

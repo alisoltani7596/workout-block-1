@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { dayFor, firstDate, lastDate } from '../lib/program'
-import { isFriday, shortDate } from '../lib/dates'
+import { isFriday, shortDate, todayISO } from '../lib/dates'
 import { normalize, useStore, type DayLog, type Tier } from '../lib/store'
 import { Card, NumberField, SectionTitle, TIER_COLOR } from '../components/ui'
 import { toCsv, toJson, download } from '../lib/exchange'
@@ -293,7 +293,8 @@ function DataSection({
 }
 
 function stamp() {
-  return new Date().toISOString().slice(0, 10)
+  // Local, so a file exported late at night is named for the day you had.
+  return todayISO()
 }
 
 function Btn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {

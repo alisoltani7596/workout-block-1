@@ -7,7 +7,23 @@ export type SetLog = {
   setIndex: number
   weightKg?: number
   reps?: number
+  seconds?: number
+  minutes?: number
+  km?: number
   done: boolean
+}
+
+/** 1 = far too easy, 3 = about right, 5 = too hard. Feeds next month's plan. */
+export type Feel = 1 | 2 | 3 | 4 | 5
+
+export type ExerciseFeedback = {
+  feel?: Feel
+  note?: string
+}
+
+export type MorningStretch = {
+  done: boolean
+  minutes?: number
 }
 
 export type DayLog = {
@@ -27,6 +43,10 @@ export type DayLog = {
   notes?: string
   /** Index-keyed ticks for habits.must, per day. */
   habits?: Record<number, boolean>
+  /** The daily 10-15 minute mobility block, separate from the session. */
+  morningStretch?: MorningStretch
+  /** How each exercise felt, keyed by exerciseLibrary key. */
+  feedback?: Record<string, ExerciseFeedback>
 }
 
 export type Settings = {
@@ -80,6 +100,9 @@ export function normalize(input: unknown): Store {
           setIndex: typeof s.setIndex === 'number' ? s.setIndex : i,
           weightKg: num(s.weightKg),
           reps: num(s.reps),
+          seconds: num(s.seconds),
+          minutes: num(s.minutes),
+          km: num(s.km),
           done: s.done === true,
         }))
     }
@@ -98,6 +121,10 @@ export function normalize(input: unknown): Store {
       footballLast20: num(value.footballLast20),
       notes: typeof value.notes === 'string' ? value.notes : undefined,
       habits: isRecord(value.habits) ? (value.habits as Record<number, boolean>) : undefined,
+      morningStretch: isRecord(value.morningStretch)
+        ? { done: value.morningStretch.done === true, minutes: num(value.morningStretch.minutes) }
+        : undefined,
+      feedback: normalizeFeedback(value.feedback),
       exercises: ex,
     }
   }
@@ -111,6 +138,22 @@ export function normalize(input: unknown): Store {
     settings: { theme: settings.theme === 'light' ? 'light' : 'dark' },
     logs,
   }
+}
+
+function normalizeFeedback(input: unknown): Record<string, ExerciseFeedback> | undefined {
+  if (!isRecord(input)) return undefined
+  const out: Record<string, ExerciseFeedback> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (!isRecord(value)) continue
+    const feel = num(value.feel)
+    const note = typeof value.note === 'string' && value.note ? value.note : undefined
+    const clean: ExerciseFeedback = {
+      feel: feel != null && feel >= 1 && feel <= 5 ? (Math.round(feel) as Feel) : undefined,
+      note,
+    }
+    if (clean.feel != null || clean.note != null) out[key] = clean
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 function num(v: unknown): number | undefined {
@@ -178,6 +221,18 @@ export function useStore() {
     })
   }, [])
 
+  const setFeedback = useCallback((date: string, exKey: string, patch: Partial<ExerciseFeedback>) => {
+    const prev = current.logs[date] ?? emptyLog(date)
+    const merged = { ...(prev.feedback?.[exKey] ?? {}), ...patch }
+    setStore({
+      ...current,
+      logs: {
+        ...current.logs,
+        [date]: { ...prev, date, feedback: { ...(prev.feedback ?? {}), [exKey]: merged } },
+      },
+    })
+  }, [])
+
   const setTheme = useCallback((theme: 'dark' | 'light') => {
     setStore({ ...current, settings: { ...current.settings, theme } })
   }, [])
@@ -193,6 +248,7 @@ export function useStore() {
     logFor: (date: string): DayLog => current.logs[date] ?? emptyLog(date),
     updateLog,
     setSets,
+    setFeedback,
     setTheme,
     replaceAll,
   }
@@ -203,15 +259,22 @@ export function loggedDates(logs: Record<string, DayLog>): string[] {
   return Object.keys(logs).sort()
 }
 
+const NUMERIC_FIELDS = ['weightKg', 'reps', 'seconds', 'minutes', 'km'] as const
+
+function hasNumber(s: SetLog): boolean {
+  return NUMERIC_FIELDS.some((f) => s[f] != null)
+}
+
 /**
- * The most recent set of this exercise before `date` that carries a number,
- * for the "last: 20 kg x 10" hint.
+ * The most recent recorded set of this exercise before `date`, for the
+ * "last: 20 kg x 10" hint. The caller formats it against the exercise's
+ * own metrics.
  */
 export function lastPerformance(
   logs: Record<string, DayLog>,
   exKey: string,
   before: string,
-): { date: string; weightKg?: number; reps?: number } | null {
+): { date: string; set: SetLog } | null {
   const dates = Object.keys(logs)
     .filter((d) => d < before)
     .sort()
@@ -219,16 +282,22 @@ export function lastPerformance(
   for (const d of dates) {
     const sets = logs[d].exercises[exKey]
     if (!sets?.length) continue
-    const useful = sets.filter((s) => s.weightKg != null || s.reps != null)
+    const useful = sets.filter(hasNumber)
     if (!useful.length) continue
-    // Heaviest set of that day, falling back to the one with the most reps.
-    const best = useful.reduce((a, b) => {
-      const aw = a.weightKg ?? -1
-      const bw = b.weightKg ?? -1
-      if (bw !== aw) return bw > aw ? b : a
-      return (b.reps ?? -1) > (a.reps ?? -1) ? b : a
-    })
-    return { date: d, weightKg: best.weightKg, reps: best.reps }
+    // The best set of that day: heaviest, then longest, then most reps.
+    const best = useful.reduce((a, b) => (score(b) > score(a) ? b : a))
+    return { date: d, set: best }
   }
   return null
+}
+
+/** Ranks sets within one day so the hint shows the best effort, not the first. */
+function score(s: SetLog): number {
+  return (
+    (s.weightKg ?? 0) * 1000 +
+    (s.km ?? 0) * 100 +
+    (s.minutes ?? 0) * 10 +
+    (s.seconds ?? 0) +
+    (s.reps ?? 0)
+  )
 }

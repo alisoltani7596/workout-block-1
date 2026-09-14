@@ -1,5 +1,6 @@
-import { library } from './program'
+import { METRIC, library, metricsFor } from './program'
 import type { DayLog, Store } from './store'
+import { FEEL_SCALE } from '../components/FeelPicker'
 
 const KEY = 'workout-block-1/v1'
 
@@ -34,13 +35,15 @@ const COLUMNS = [
  * a spreadsheet stays readable. The JSON export is the lossless one.
  */
 export function toCsv(logs: Record<string, DayLog>): string {
-  const header = [...COLUMNS, 'exercises']
+  const header = [...COLUMNS, 'morningStretchMin', 'exercises', 'exerciseFeedback']
   const rows = Object.keys(logs)
     .sort()
     .map((date) => {
       const log = logs[date]
       const cells = COLUMNS.map((c) => cell(log[c]))
+      cells.push(cell(log.morningStretch?.done ? (log.morningStretch.minutes ?? 'done') : ''))
       cells.push(cell(flattenExercises(log)))
+      cells.push(cell(flattenFeedback(log)))
       return cells.join(',')
     })
   return [header.join(','), ...rows].join('\r\n')
@@ -50,16 +53,32 @@ function flattenExercises(log: DayLog): string {
   return Object.entries(log.exercises)
     .map(([key, sets]) => {
       const name = library[key]?.name ?? key
+      const metrics = metricsFor(key)
       const parts = sets
-        .filter((s) => s.done || s.weightKg != null || s.reps != null)
+        .filter((s) => s.done || metrics.some((m) => s[m] != null))
         .map((s) => {
-          const w = s.weightKg != null ? `${s.weightKg}kg` : ''
-          const r = s.reps != null ? `x${s.reps}` : ''
+          const measured = metrics
+            .filter((m) => s[m] != null)
+            .map((m) => `${s[m]}${METRIC[m].suffix}`)
+            .join('/')
           const mark = s.done ? '' : '(not done)'
-          return `${w}${r}${mark}` || (s.done ? 'done' : '')
+          return `${measured || (s.done ? 'done' : '')}${mark}`
         })
         .filter(Boolean)
       return parts.length ? `${name}: ${parts.join(' ')}` : ''
+    })
+    .filter(Boolean)
+    .join(' | ')
+}
+
+/** The month-2 material: how each exercise felt, in the athlete's words. */
+function flattenFeedback(log: DayLog): string {
+  return Object.entries(log.feedback ?? {})
+    .map(([key, fb]) => {
+      const name = library[key]?.name ?? key
+      const feel = FEEL_SCALE.find((f) => f.value === fb.feel)?.short
+      const bits = [feel, fb.note].filter(Boolean).join(' — ')
+      return bits ? `${name}: ${bits}` : ''
     })
     .filter(Boolean)
     .join(' | ')
