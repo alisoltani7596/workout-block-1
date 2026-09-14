@@ -9,9 +9,12 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "build:file": "FILE_BUILD=1 vite build && node scripts/inline.mjs",
-    "verify:file": "npm run build:file && node scripts/verify-file-build.mjs"
+    "verify:file": "npm run build:file && node scripts/verify-file-build.mjs",
+    "garmin": "node scripts/garmin-pull.mjs",
+    "test:garmin": "node scripts/garmin-pull.test.mjs"
   },
   "dependencies": {
+    "garmin-connect": "^1.6.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^3.10.1"

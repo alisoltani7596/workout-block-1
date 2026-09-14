@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, useState } from 'react'
 import { clampToBlock, todayISO } from './lib/dates'
 import { meta, type TierName } from './lib/program'
 import { useStore } from './lib/store'
+import { countFields, parseImportHash } from './lib/urlImport'
+import { shortDate } from './lib/dates'
 import { RestTimerProvider } from './components/RestTimer'
 import { Today } from './screens/Today'
 import { PlanScreen } from './screens/PlanScreen'
@@ -46,10 +48,43 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function App() {
-  const { settings, setTheme } = useStore()
+  const { settings, setTheme, updateLog } = useStore()
   const [tab, setTab] = useState<Tab>('today')
   const [date, setDate] = useState(() => clampToBlock(todayISO()))
   const [tier, setTier] = useState<TierName>('must')
+  const [toast, setToast] = useState<string | null>(null)
+
+  // Numbers arriving from outside: a Shortcut or the Garmin puller opening
+  // the page with a #log or #import fragment. Runs on load and again if the
+  // already-open tab is handed a new fragment.
+  useEffect(() => {
+    const apply = () => {
+      const parsed = parseImportHash(window.location.hash)
+      if (!parsed) return
+      const dates = Object.keys(parsed.days).sort()
+      for (const d of dates) updateLog(d, parsed.days[d])
+      history.replaceState(null, '', window.location.pathname + window.location.search)
+      const n = countFields(parsed)
+      setToast(
+        dates.length === 1
+          ? `Imported ${n} field${n === 1 ? '' : 's'} for ${shortDate(dates[0])}`
+          : `Imported ${n} fields across ${dates.length} days`,
+      )
+      if (dates.length === 1) {
+        setDate(clampToBlock(dates[0]))
+        setTab('today')
+      }
+    }
+    apply()
+    window.addEventListener('hashchange', apply)
+    return () => window.removeEventListener('hashchange', apply)
+  }, [updateLog])
+
+  useEffect(() => {
+    if (!toast) return
+    const id = window.setTimeout(() => setToast(null), 4000)
+    return () => window.clearTimeout(id)
+  }, [toast])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
@@ -111,6 +146,21 @@ export default function App() {
             {tab === 'log' && <LogScreen date={date} setDate={setDate} />}
           </div>
         </main>
+
+        {toast && (
+          <div
+            className="pop pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-4"
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className="rounded-full border-2 px-4 py-2 text-sm font-semibold shadow-2xl"
+              style={{ background: 'var(--must)', borderColor: 'var(--must)', color: 'var(--must-ink)' }}
+            >
+              {toast}
+            </div>
+          </div>
+        )}
 
         {/* Mobile tab bar */}
         <nav

@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 dist-file
+
+# pulled Garmin data and throwaway dev scripts
+garmin/*.json
+scripts/dev/
