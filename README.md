@@ -13,6 +13,9 @@ npm install
 npm run dev
 ```
 
+It is live at **https://alisoltani7596.github.io/workout-block-1/** — that is the URL the
+iOS Shortcut and the Garmin puller point at by default.
+
 Two build targets:
 
 ```bash
@@ -21,6 +24,16 @@ npm run build
 
 `dist/` — a normal hashed bundle with the charts code-split out, for GitHub Pages or any static
 host. Relative base, so a subpath works.
+
+```bash
+npm run deploy
+```
+
+Builds and publishes `dist/` to the `gh-pages` branch, which GitHub Pages serves. Run it after
+any change you want on the phone. There is deliberately no Actions workflow: the `gh` token on
+this machine has `repo` scope but not `workflow`, and GitHub refuses a `.github/workflows/`
+file without it. If you want deploy-on-push later, `gh auth refresh -s workflow` grants the
+scope and a standard Pages workflow can be added.
 
 ```bash
 npm run build:file
