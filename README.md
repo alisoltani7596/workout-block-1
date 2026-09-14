@@ -66,7 +66,16 @@ sync). The Shortcut in [`shortcuts/`](shortcuts/) reads **yesterday's** steps, a
 calories, resting heart rate and weight from Health and opens the app with them. Install it by
 opening the `.shortcut` file on the phone, then edit the first Text action to wherever the app
 is hosted. Run it in the morning so "yesterday" is a complete day — or add it as a personal
-Automation at 07:00 so it just happens.
+Automation at 07:00 (with *Run Immediately* on) so it just happens. The first run asks for
+Health read access and permission to open URLs — grant both once.
+
+Two things to check before trusting the numbers: Health must be set to **kilograms**
+(Health → Profile → Units → Weight), because the Shortcut sends whatever unit Health displays
+and does not convert pounds. And the two Date actions are typed as "yesterday at 00:00" /
+"today at 00:00" — confirm they resolve to midnight on your phone's locale after import.
+
+`shortcuts/Sync Health to Block 1.xml` is the unsigned source, kept so changes are readable
+in git; the `.shortcut` is the signed one you install.
 
 What it cannot carry: **Garmin's sleep score and Body Battery**. Those never leave Garmin
 Connect into Apple Health. For those you need the Mac route.
